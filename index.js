@@ -26,18 +26,121 @@ async function run() {
         await client.connect();
 
         const expertscollection = client.db("sasthocareDB").collection("experts");
+        const favscollection = client.db("sasthocareDB").collection("favs");
+        const appointmentsCollection = client.db("sasthocareDB").collection("appointments");
+
+
+        // ✅ POST new expert
+        app.post('/experts', async (req, res) => {
+            try {
+                const expert = req.body;
+                if (!expert?.email || !expert?.name || !expert?.category || !expert?.role) {
+                    return res.status(400).json({ message: 'Missing required expert fields.' });
+                }
+
+                const existing = await expertscollection.findOne({ email: expert.email });
+                if (existing) {
+                    return res.status(409).json({ message: 'Expert with this email already exists.' });
+                }
+
+                const result = await expertscollection.insertOne(expert);
+                res.status(201).json({ message: 'Expert saved successfully!', insertedId: result.insertedId });
+            } catch (error) {
+                res.status(500).json({ message: 'Server error' });
+            }
+        });
+
+        app.get('/experts/:email', async (req, res) => {
+            try {
+                const emailParam = req.params.email;
+
+                // Case-insensitive regex search for email
+                const expert = await expertscollection.findOne({ email: { $regex: `^${emailParam}$`, $options: "i" } });
+
+                if (!expert) {
+                    return res.status(404).json({ message: 'Expert not found' });
+                }
+
+                res.json(expert);
+            } catch (error) {
+                console.error('Error fetching expert by email:', error);
+                res.status(500).json({ message: 'Server error' });
+            }
+        });
+
+
 
         app.get('/experts', async (req, res) => {
             try {
-                console.log('Fetching experts from DB...');
-                const experts = await expertscollection.find({}).toArray();
-                console.log('Experts found:', experts.length);
+              
                 res.json(experts);
             } catch (error) {
                 console.error('Error fetching experts:', error);
                 res.status(500).json({ message: 'Server error' });
             }
         });
+
+
+
+
+
+        // ✅ Add a new appointment
+        app.post('/appointments', async (req, res) => {
+            try {
+                const appointment = req.body;
+
+                if (!appointment.name || !appointment.date || !appointment.status) {
+                    return res.status(400).json({ message: 'Missing required appointment fields.' });
+                }
+
+                appointment.createdAt = new Date();
+                const result = await appointmentsCollection.insertOne(appointment);
+                res.status(201).json({ message: 'Appointment saved successfully!', insertedId: result.insertedId });
+            } catch (error) {
+                console.error('Error saving appointment:', error);
+                res.status(500).json({ message: 'Server error' });
+            }
+        });
+
+        // ✅ Get all appointments
+        app.get('/appointments', async (req, res) => {
+            try {
+                const appointments = await appointmentsCollection.find({}).toArray();
+                res.json(appointments);
+            } catch (error) {
+                console.error('Error fetching appointments:', error);
+                res.status(500).json({ message: 'Server error' });
+            }
+        });
+
+        // ✅ Get appointments for a specific user (by email)
+        app.get('/appointments/:email', async (req, res) => {
+            try {
+                const email = req.params.email;
+                const appointments = await appointmentsCollection.find({ userEmail: email }).toArray();
+                res.json(appointments);
+            } catch (error) {
+                console.error('Error fetching user appointments:', error);
+                res.status(500).json({ message: 'Server error' });
+            }
+        });
+
+
+        // Node.js + Express backend
+        app.get('/favs', async (req, res) => {
+            const email = req.query.email;
+            const query = { userEmail: email };
+            const result = await favscollection.find(query).toArray();
+            res.send(result);
+        });
+
+
+        app.post('/favs', async (req, res) => {
+            const favoExpart = req.body;
+            const result = await favscollection.insertOne(favoExpart);
+            res.send(result);
+        });
+
 
 
 
